@@ -55,8 +55,8 @@ function importCSVintoSnowflake(conn, theBlob, rowIncludeFlag, bqProjectId, bqDa
 	console.log(theBlob)
 
 	conn.execute({
-		// sqlText: 'insert into COEJR_LEARNING.COE_SANDBOX.COE_GASBILL(transactionDate, transactionAmount, transactionStatus) VAlUES(?, ?, ?)',
-		sqlText: 'insert into COEJR_LEARNING.COE_SANDBOX.COE_GASBILL(transactionDate) VAlUES(?)',
+		// sqlText: 'insert into COEJR_LEARNING.COE_SANDBOX.COE_GASBILL(transactionDate, transactionStatus) VAlUES(?, ?)',
+		sqlText: 'insert into COEJR_LEARNING.COE_SANDBOX.COE_GASBILL(transactionDate, transactionAmount, transactionStatus) VAlUES(?, ?, ?)',
 		binds: theBlob,
 		// binds: [['2022-02-10', 550.20, 'Received']],
 		complete: function(err, stmt, rows) {
@@ -127,7 +127,8 @@ function getCSVContentArray(conn, theCSVIds, theProjectId, theDataSetId, theTabl
 		for(j = 0; j < firstFileDataRow.length; j++) {
 			t_db_transactionDate = dateFix(firstFileDataRow[j][0])
 			if(j != 0) {
-				valueArray.push(["'" + t_db_transactionDate + "', " + firstFileDataRow[j][1] + ", '" + firstFileDataRow[j][2] + "'"])
+				// valueArray.push([["'" + t_db_transactionDate + "'"], [firstFileDataRow[j][1]], ["'" + firstFileDataRow[j][2] + "'"]])
+				valueArray.push([t_db_transactionDate, firstFileDataRow[j][1], firstFileDataRow[j][2]])
 				console.log(valueArray)
       				importCSVintoSnowflake(conn, valueArray, 0, theProjectId, theDataSetId, theTableId)
 				valueArray = []
@@ -140,10 +141,7 @@ function getCSVContentArray(conn, theCSVIds, theProjectId, theDataSetId, theTabl
 	});
       var regex = new RegExp(('\n,'),'gi')
 
-      // theBlob = Utilities.newBlob(t_record.toString().replace(regex, '\n'), 'application/octet-stream')
 
-      // importCSVintoSnowflake(theBlob, 0, theProjectId, theDataSetId, theTableId)
-      // console.log(t_record.toString().replace(regex, "\n"))
       t_record_sub = []
       t_record = []
 
