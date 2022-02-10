@@ -55,7 +55,7 @@ function importCSVintoSnowflake(conn, theBlob, rowIncludeFlag, bqProjectId, bqDa
 	console.log(theBlob)
 
 	conn.execute({
-		// sqlText: 'insert into COEJR_LEARNING.COE_SANDBOX.COE_GASBILL(transactionDate, transactionStatus) VAlUES(?, ?)',
+		// sqlText: 'use warehouse COMPUTE_WH_XL; insert into COEJR_LEARNING.COE_SANDBOX.COE_GASBILL(transactionDate, transactionStatus) VAlUES(?, ?)',
 		sqlText: 'insert into COEJR_LEARNING.COE_SANDBOX.COE_GASBILL(transactionDate, transactionAmount, transactionStatus) VAlUES(?, ?, ?)',
 		binds: theBlob,
 		// binds: [['2022-02-10', 550.20, 'Received']],
@@ -102,6 +102,20 @@ function dateFix(m_line) {
 
 }
 
+function amountFix(m_line) {
+
+	console.log(m_line)
+
+	n_regex = new RegExp("^\\$", "gi")
+
+	m_line_fix = m_line.replace(n_regex, "")
+
+	console.log(m_line_fix)
+
+	return m_line_fix
+
+}
+
 
 function getCSVContentArray(conn, theCSVIds, theProjectId, theDataSetId, theTableId, flg_includeHeader, theFolderName) {
 
@@ -126,11 +140,12 @@ function getCSVContentArray(conn, theCSVIds, theProjectId, theDataSetId, theTabl
       		// t_record.push([firstFileDataRow])
 		for(j = 0; j < firstFileDataRow.length; j++) {
 			t_db_transactionDate = dateFix(firstFileDataRow[j][0])
+			t_db_transactionAmount = amountFix(firstFileDataRow[j][1])
 			if(j != 0) {
-				// valueArray.push([["'" + t_db_transactionDate + "'"], [firstFileDataRow[j][1]], ["'" + firstFileDataRow[j][2] + "'"]])
-				valueArray.push([t_db_transactionDate, firstFileDataRow[j][1], firstFileDataRow[j][2]])
-				console.log(valueArray)
-      				importCSVintoSnowflake(conn, valueArray, 0, theProjectId, theDataSetId, theTableId)
+				// valueArray.push([[t_db_transactionDate], [firstFileDataRow[j][1]], [firstFileDataRow[j][2]]])
+				valueArray.push([t_db_transactionDate, t_db_transactionAmount, firstFileDataRow[j][2]])
+				setTimeout(() => { console.log(valueArray); }, 1750);
+      			importCSVintoSnowflake(conn, valueArray, 0, theProjectId, theDataSetId, theTableId)
 				valueArray = []
 			}
 			// console.log("[---- " + t_db_transactionDate + " ----]: " + ", " + firstFileDataRow[j][1] + ", " + firstFileDataRow[j][2])
@@ -211,7 +226,8 @@ function connectUp() {
 		accessUrl: process.env.SNOW_URL,
 		account: process.env.SNOW_ACCOUNT,
 		username: process.env.SNOW_USER,
-		password: process.env.SNOW_PASS
+		password: process.env.SNOW_PASS,
+		warehouse: process.env.SNOW_WH
 	});
 
 	connection.connect(
