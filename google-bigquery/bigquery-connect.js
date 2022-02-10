@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { parse } = require('csv-parse');
 
-function createDataTable(conn, projectId, datasetId, newTableId) {
+function createDataTable(projectId, datasetId, newTableId) {
 
   newDataSetId = datasetId
 
@@ -32,43 +32,30 @@ function createDataTable(conn, projectId, datasetId, newTableId) {
 //  BigQuery.Tables.insert(table, projectId, datasetId)
 }
 
-function insertDataIntoSnowflake(conn, theBlob, projectId, tableId, theJob) {
+function insertDataIntoSnowflake(theBlob, projectId, tableId, theJob) {
 
  //  job = BigQuery.Jobs.insert(theJob, projectId, theBlob)
 }
 
-function importCSVintoSnowflake(conn, theBlob, rowIncludeFlag, bqProjectId, bqDatasetId, bqTableId) {
+function importCSVintoSnowflake(theBlob, rowIncludeFlag, bqProjectId, bqDatasetId, bqTableId) {
 
-	  var job = {
-	    configuration: {
-	      load: {
-		destinationTable: {
-		  projectId: bqProjectId,
-		  datasetId: bqDatasetId,
-		  tableId: bqTableId
-		},
-		skipLeadingRows: rowIncludeFlag
-	      }
-	    }
-	  };
+  var job = {
+    configuration: {
+      load: {
+        destinationTable: {
+          projectId: bqProjectId,
+          datasetId: bqDatasetId,
+          tableId: bqTableId
+        },
+        skipLeadingRows: rowIncludeFlag
+      }
+    }
+  };
 
-	console.log(theBlob)
-
-	conn.execute({
-		// sqlText: 'insert into COEJR_LEARNING.COE_SANDBOX.COE_GASBILL(transactionDate, transactionAmount, transactionStatus) VAlUES(?, ?, ?)',
-		sqlText: 'insert into COEJR_LEARNING.COE_SANDBOX.COE_GASBILL(transactionDate) VAlUES(?)',
-		binds: theBlob,
-		// binds: [['2022-02-10', 550.20, 'Received']],
-		complete: function(err, stmt, rows) {
-			if(err) {
-				console.error('Failure occurred: ' + err.message)	
-			}
-			else {
-				console.log('Number of rows: ' + rows.length)
-			}
-		}
-	});
-
+  // console.log(job + ": " + bqProjectId)
+  // job = BigQuery.Jobs.insert(job, bqProjectId, theBlob)
+  // insertDataIntoBigQuery(theBlob, bqProjectId, bqTableId, job)
+  // console.log(job + ": --- : ")
 }
 
 function getCSVContentBlob(theCSVIds, theProjectId, theDataSetId, theTableId, flg_includeHeader) {
@@ -103,7 +90,7 @@ function dateFix(m_line) {
 }
 
 
-function getCSVContentArray(conn, theCSVIds, theProjectId, theDataSetId, theTableId, flg_includeHeader, theFolderName) {
+function getCSVContentArray(theCSVIds, theProjectId, theDataSetId, theTableId, flg_includeHeader, theFolderName) {
 
   myFolder = path.join(__dirname, theFolderName)
   let j = 0
@@ -113,7 +100,6 @@ function getCSVContentArray(conn, theCSVIds, theProjectId, theDataSetId, theTabl
 	var firstFileDataCSV = []
 	var firstFileDataRow = []
 	var dataPack = []
-	var valueArray = []
   for(i = 0; i < theCSVIds.length; i++) {
 
 	fs.createReadStream(theCSVIds[i])
@@ -126,24 +112,17 @@ function getCSVContentArray(conn, theCSVIds, theProjectId, theDataSetId, theTabl
       		// t_record.push([firstFileDataRow])
 		for(j = 0; j < firstFileDataRow.length; j++) {
 			t_db_transactionDate = dateFix(firstFileDataRow[j][0])
-			if(j != 0) {
-				valueArray.push(["'" + t_db_transactionDate + "', " + firstFileDataRow[j][1] + ", '" + firstFileDataRow[j][2] + "'"])
-				console.log(valueArray)
-      				importCSVintoSnowflake(conn, valueArray, 0, theProjectId, theDataSetId, theTableId)
-				valueArray = []
-			}
-			// console.log("[---- " + t_db_transactionDate + " ----]: " + ", " + firstFileDataRow[j][1] + ", " + firstFileDataRow[j][2])
+			dataPack.push([t_db_transactionDate], [firstFileDataRow[j][1]], [firstFileDataRow[j][2]])
+			console.log("[---- " + t_db_transactionDate + " ----]: " + ", " + firstFileDataRow[j][1] + ", " + firstFileDataRow[j][2])
 		}
-		t_record.push([dataPack])
-		// console.log(dataPack.map(x => x.join(',')).join('\r'))
-		// console.log(t_record)
+		console.log(dataPack.map(x => x.join(',')).join('\n'))
 	});
       var regex = new RegExp(('\n,'),'gi')
 
       // theBlob = Utilities.newBlob(t_record.toString().replace(regex, '\n'), 'application/octet-stream')
 
       // importCSVintoSnowflake(theBlob, 0, theProjectId, theDataSetId, theTableId)
-      // console.log(t_record.toString().replace(regex, "\n"))
+      console.log(t_record.toString().replace(regex, "\n"))
       t_record_sub = []
       t_record = []
 
@@ -153,7 +132,7 @@ function getCSVContentArray(conn, theCSVIds, theProjectId, theDataSetId, theTabl
 }
 
 
-function getCSVFiles(conn, theFolderName, theProjectId, theDataSetId, theTableId) {
+function getCSVFiles(theFolderName, theProjectId, theDataSetId, theTableId) {
   myFolder = path.join(__dirname, theFolderName)
   var csvIDs = []
 
@@ -180,57 +159,57 @@ function getCSVFiles(conn, theFolderName, theProjectId, theDataSetId, theTableId
    		// console.log(csvIDs.length + " : " )
 
    	});
-	getCSVContentArray(conn, csvIDs, theProjectId, theDataSetId, theTableId, false, theFolderName)
+	getCSVContentArray(csvIDs, theProjectId, theDataSetId, theTableId, false, theFolderName)
 	console.log(csvIDs)
     });
 }
 
-function main(conn) {
+function main() {
   projectId = "midyear-glazing-196002"
   folderName = "rcjGasBillPaymentHistory"
   datasetId = 'ds_' + new Date().getTime()
   tableId = 'table_' + new Date().getTime()
 
-  createDataTable(conn, projectId, datasetId, tableId)
-  getCSVFiles(conn, folderName, projectId, datasetId, tableId)
+  createDataTable(projectId, datasetId, tableId)
+  getCSVFiles(folderName, projectId, datasetId, tableId)
 }
 
 
-function loadTest(conn) {
+function loadTest() {
   projectId = "midyear-glazing-196002"
   folderName = "rcjGasBillPaymentHistory"
   datasetId = "ds_1644416200996"
   tableId = "table_1644416200996"
 
   // createDataTable(projectId, datasetId, tableId)
-  getCSVFiles(conn, folderName, projectId, datasetId, tableId)
+  getCSVFiles(folderName, projectId, datasetId, tableId)
 }
 
 function connectUp() {
 
 
-	var connection = snowflake.createConnection( {
-		accessUrl: process.env.SNOW_URL,
-		account: process.env.SNOW_ACCOUNT,
-		username: process.env.SNOW_USER,
-		password: process.env.SNOW_PASS
-	});
+var connection = snowflake.createConnection( {
+	accessUrl: process.env.SNOW_URL,
+ 	account: process.env.SNOW_ACCOUNT,
+	username: process.env.SNOW_USER,
+	password: process.env.SNOW_PASS
+});
 
-	connection.connect(
-		function(err, conn) {
+connection.connect(
+	function(err, conn) {
 
-			if(err) {
-				console.error('Unable to connect: ' + err.message);
-			}
-			else {
-				console.log('Successfully connected to Snowflake.');
-				connection_ID = conn.getId();
-			}
-
+		if(err) {
+			console.error('Unable to connect: ' + err.message);
 		}
-	);
+		else {
+			console.log('Successfully connected to Snowflake.');
+			connection_ID = conn.getId();
+		}
 
-	main(connection)
+	}
+);
+
+main()
 
 }
 
