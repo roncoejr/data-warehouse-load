@@ -1,5 +1,7 @@
 {
   "dependencies": {
+    "@aws-sdk/client-redshift": "^3.51.0",
+    "@google-cloud/bigquery": "^5.10.0",
     "csv-parse": "^5.0.4"
   }
 }
