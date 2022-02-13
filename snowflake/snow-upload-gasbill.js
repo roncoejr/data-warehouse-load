@@ -148,9 +148,9 @@ function getCSVContentArray(conn, theCSVIds, theProjectId, theDataSetId, theTabl
 			importCSVintoSnowflake(conn, valueArray, 0, theProjectId, theDataSetId, theTableId)
 			insertedFlag = true
 		}
+		}
 	});
-
-  }
+	}
 }
 
 
