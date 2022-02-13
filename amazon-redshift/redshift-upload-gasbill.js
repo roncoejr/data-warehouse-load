@@ -1,9 +1,28 @@
-const snowflake = require('snowflake-sdk');
+const {RedshiftClient, AcceptReservedNodeExchangeCommand} = require('@aws-sdk/client-redshift');
+
+const rs_client = new RedShiftClient({region: process.env.AMZN_REGION});
+
+const params = {
+  ClusterIdentifier: process.env.AMZN_RS_CLUSTER,
+  NodeType: process.env.AMZN_RS_NODE_TYPE,
+  MasterUsername: process.env.AMZN_RS_MASTER_USERNAME,
+  MasterUserPassword: process.env.AMZN_RS_MASTER_PASSWORD,
+  ClusterType: process.env.AMZN_RS_CLUSTER_TYPE,
+  IAMRoleARN: process.env.AMZN_RS_IAM_ROLE_ARN,
+  ClusterSubnetGroupName: process.env.AMZN_RS_CLUSTER_SUBNET_GROUPNAME,
+  DBName: process.env.AMZN_RS_DATABASE_NAME,
+  Port: process.env.AMZN_RS_PORT_NUMBER
+
+};
+
+const command = new AcceptReservedNodeExchangeCommand(params);
+
 const path = require('path');
 const fs = require('fs');
 const { parse } = require('csv-parse');
 
-function createDataTable(projectId, datasetId, newTableId) {
+
+async function createDataTable(projectId, datasetId, newTableId) {
 
   newDataSetId = datasetId
 
@@ -27,17 +46,83 @@ function createDataTable(projectId, datasetId, newTableId) {
       datasetId: newDataSetId
     }
   };
+  async function createTable() {
+    const t_opt = {
+      schema: table.schema,
+      location: 'US',
+    };
 
-//  BigQuery.Datasets.insert(dataset, projectId)
-//  BigQuery.Tables.insert(table, projectId, datasetId)
+  //  BigQuery.Datasets.insert(dataset, projectId)
+
+  const [bq_dataset] = await bigquery.createDataset(datasetId)
+  console.log(`Dataset: ${bq_dataset.id} created.`);
+  //  BigQuery.Tables.insert(table, projectId, datasetId)
+  const [bq_table] = await bigquery
+                            .dataset(datasetId)
+                            .createTable(newTableId, t_opt)
+  console.log(`Table: ${bq_table.id} created.`)
+  }
+  createTable()
 }
 
-function insertDataIntoSnowflake(theBlob, projectId, tableId, theJob) {
+
+async function alt_createDataTable(projectId, datasetId, newTableId) {
+
+  newDataSetId = datasetId
+
+  var table = {
+    tableReference: {
+      projectId: projectId,
+      datasetId: newDataSetId,
+      tableId: newTableId
+    },
+    schema: {
+      fields: [
+        {name: 'transactionDate', type: 'DATE'},
+        {name: "transactionAmount", type: "FLOAT"},
+        {name: "transactionStatus", type: "STRING"}
+      ]
+    }
+  };
+
+  var dataset = {
+    datasetReference: {
+      datasetId: newDataSetId
+    }
+  };
+  async function createTable() {
+    const t_opt = {
+      schema: table.schema,
+      location: 'US',
+    };
+
+  //  BigQuery.Datasets.insert(dataset, projectId)
+
+  // const [bq_dataset] = await bigquery.createDataset(datasetId)
+  // console.log(`Dataset: ${bq_dataset.id} created.`);
+  //  BigQuery.Tables.insert(table, projectId, datasetId)
+  const [bq_table] = await bigquery
+                            .dataset(datasetId)
+                            .createTable(newTableId, t_opt)
+  console.log(`Table: ${bq_table.id} created.`)
+  }
+  createTable()
+}
+
+
+
+async function insertDataIntoBigQuery(dataPack, projectId, datasetId, tableId) {
 
  //  job = BigQuery.Jobs.insert(theJob, projectId, theBlob)
+  await bigquery
+  .dataset(datasetId)
+  .table(tableId)
+  .insert(dataPack)
+
+  console.log(`Inserted ${dataPack.length} rows.`)
 }
 
-function importCSVintoSnowflake(theBlob, rowIncludeFlag, bqProjectId, bqDatasetId, bqTableId) {
+function importCSVintoBigQuery(theBlob, rowIncludeFlag, bqProjectId, bqDatasetId, bqTableId) {
 
   var job = {
     configuration: {
@@ -66,10 +151,10 @@ function getCSVContentBlob(theCSVIds, theProjectId, theDataSetId, theTableId, fl
       var firstFileData = firstFile.getBlob().setContentType('application/octet-stream')
 
       if((i == 0) && (flg_includeHeader)) {
-        importCSVintoSnowflake(firstFileData, 0, theProjectId, theDataSetId, theTableId)
+        importCSVintoBigQuery(firstFileData, 0, theProjectId, theDataSetId, theTableId)
       }
       else {
-        importCSVintoSnowflake(firstFileData, 1, theProjectId, theDataSetId, theTableId)
+        importCSVintoBigQuery(firstFileData, 1, theProjectId, theDataSetId, theTableId)
       }
       console.log(theCSVIds[i] + ": ")
       console.log(firstFileData)
@@ -90,45 +175,56 @@ function dateFix(m_line) {
 }
 
 
+function amountFix(m_line) {
+
+	console.log("Passed to amount fix: " + m_line)
+
+	n_regex = new RegExp("\\$", "gi")
+
+	m_line_fix = m_line.replace(n_regex, "")
+
+	console.log("Result of amount fix: " + m_line_fix)
+
+	return m_line_fix
+
+}
+
+
 function getCSVContentArray(theCSVIds, theProjectId, theDataSetId, theTableId, flg_includeHeader, theFolderName) {
 
   myFolder = path.join(__dirname, theFolderName)
-  let j = 0
-  let theBlob = ""
-  let t_record = []
-  let t_record_sub = []
-	var firstFileDataCSV = []
-	var firstFileDataRow = []
-	var dataPack = []
+	const firstFileDataCSV = []
+	const firstFileDataRow = []
+  const dataPack = []
+  var insertedFlag = false
   for(i = 0; i < theCSVIds.length; i++) {
 
-	fs.createReadStream(theCSVIds[i])
-		.pipe(parse({delimiter: ','}))
-		.on('data', function(firstFileDataCSV) {
+        fs.createReadStream(theCSVIds[i])
+          .pipe(parse({delimiter: ','}))
+          .on('data', function(firstFileDataCSV) {
 
-			firstFileDataRow.push(firstFileDataCSV)	
-	})
-	.on('end', function() {
-      		// t_record.push([firstFileDataRow])
-		for(j = 0; j < firstFileDataRow.length; j++) {
-			t_db_transactionDate = dateFix(firstFileDataRow[j][0])
-			dataPack.push([t_db_transactionDate], [firstFileDataRow[j][1]], [firstFileDataRow[j][2]])
-			console.log("[---- " + t_db_transactionDate + " ----]: " + ", " + firstFileDataRow[j][1] + ", " + firstFileDataRow[j][2])
-		}
-		console.log(dataPack.map(x => x.join(',')).join('\n'))
-	});
-      var regex = new RegExp(('\n,'),'gi')
+            firstFileDataRow.push(firstFileDataCSV)	
+        })
+        .on('end', function() {
+                // t_record.push([firstFileDataRow])
+          for(j = 0; j < firstFileDataRow.length; j++) {
+            if(firstFileDataRow[j][0] != "transactionDate") {
+                t_db_transactionDate = dateFix(firstFileDataRow[j][0])
+                t_db_transactionAmount = amountFix(firstFileDataRow[j][1])
+                dataPack.push({transactionDate: t_db_transactionDate, transactionAmount: parseFloat(t_db_transactionAmount), transactionStatus: firstFileDataRow[j][2]})
+            }
+          }
+            // console.log("[---- " + t_db_transactionDate + " ----]: " + ", " + firstFileDataRow[j][1] + ", " + firstFileDataRow[j][2])
+            if(!insertedFlag) {
+              insertDataIntoBigQuery(dataPack, theProjectId, theDataSetId, theTableId)
+              console.log(dataPack)
+              // console.log(dataPack)
+                // console.log(dataPack.map(x => x.join(',')).join('\n'))
+              insertedFlag = true
+            }
 
-      // theBlob = Utilities.newBlob(t_record.toString().replace(regex, '\n'), 'application/octet-stream')
-
-      // importCSVintoSnowflake(theBlob, 0, theProjectId, theDataSetId, theTableId)
-      console.log(t_record.toString().replace(regex, "\n"))
-      t_record_sub = []
-      t_record = []
-
+          });
   }
-
-
 }
 
 
@@ -136,32 +232,16 @@ function getCSVFiles(theFolderName, theProjectId, theDataSetId, theTableId) {
   myFolder = path.join(__dirname, theFolderName)
   var csvIDs = []
 
-  //if(myFolder.hasNext()) {
-   // myFolderOfInterest = myFolder.next()
-   // myFolderId = myFolderOfInterest.getId()
-   //  console.log(myFolderId)
-   //  myFiles = myFolderOfInterest.getFiles()
-   //  while(myFiles.hasNext()) {
-   //   theFile = myFiles.next()
-   //   csvIDs.push(theFile.getId())
-   //   console.log(theFile.getName())
-   //  }
-
-   fs.readdir(myFolder, function(err, myFiles) {
-
-	if(err) {
-		return console.log('Unable to scan directory: ' + err)
-	}
-	myFiles.forEach(function(file) {
-		csvIDs.push(myFolder + "/" + file)
-		// console.log(csvIDs);
-		// getCSVContentsBlob(csvIDs, theProjectId, theDataSetId, theTableId, false)
-   		// console.log(csvIDs.length + " : " )
-
-   	});
-	getCSVContentArray(csvIDs, theProjectId, theDataSetId, theTableId, false, theFolderName)
-	console.log(csvIDs)
-    });
+  fs.readdir(myFolder, function(err, myFiles) {
+      if(err) {
+        return console.log('Unable to scan directory: ' + err)
+      }
+      myFiles.forEach(function(file) {
+        csvIDs.push(myFolder + "/" + file)
+      });
+      getCSVContentArray(csvIDs, theProjectId, theDataSetId, theTableId, false, theFolderName)
+      console.log(csvIDs)
+  });
 }
 
 function main() {
@@ -174,11 +254,22 @@ function main() {
   getCSVFiles(folderName, projectId, datasetId, tableId)
 }
 
+function alt_main() {
+  projectId = "midyear-glazing-196002"
+  folderName = "rcjGasBillPaymentHistory"
+  datasetId = "ds_1644708979307"
+  tableId = "table_1644709985185"
+
+  // alt_createDataTable(projectId, datasetId, tableId)
+  getCSVFiles(folderName, projectId, datasetId, tableId)
+}
+
+
 
 function loadTest() {
   projectId = "midyear-glazing-196002"
   folderName = "rcjGasBillPaymentHistory"
-  datasetId = "ds_1644416200996"
+  datasetId = "ds_1644708979307"
   tableId = "table_1644416200996"
 
   // createDataTable(projectId, datasetId, tableId)
@@ -188,32 +279,9 @@ function loadTest() {
 function connectUp() {
 
 
-var connection = snowflake.createConnection( {
-	accessUrl: process.env.SNOW_URL,
- 	account: process.env.SNOW_ACCOUNT,
-	username: process.env.SNOW_USER,
-	password: process.env.SNOW_PASS
-});
-
-connection.connect(
-	function(err, conn) {
-
-		if(err) {
-			console.error('Unable to connect: ' + err.message);
-		}
-		else {
-			console.log('Successfully connected to Snowflake.');
-			connection_ID = conn.getId();
-		}
-
-	}
-);
-
-main()
+    alt_main()
 
 }
-
-
 
 connectUp()
 

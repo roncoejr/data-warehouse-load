@@ -55,10 +55,8 @@ function importCSVintoSnowflake(conn, theBlob, rowIncludeFlag, bqProjectId, bqDa
 	console.log(theBlob)
 
 	conn.execute({
-		// sqlText: 'use warehouse COMPUTE_WH_XL; insert into COEJR_LEARNING.COE_SANDBOX.COE_GASBILL(transactionDate, transactionStatus) VAlUES(?, ?)',
 		sqlText: 'insert into COEJR_LEARNING.COE_SANDBOX.COE_GASBILL(transactionDate, transactionAmount, transactionStatus) VAlUES(?, ?, ?)',
 		binds: theBlob,
-		// binds: [['2022-02-10', 550.20, 'Received']],
 		complete: function(err, stmt, rows) {
 			if(err) {
 				console.error('Failure occurred: ' + err.message)	
@@ -143,23 +141,16 @@ function getCSVContentArray(conn, theCSVIds, theProjectId, theDataSetId, theTabl
 			t_db_transactionDate = dateFix(firstFileDataRow[j][0])
 			t_db_transactionAmount = amountFix(firstFileDataRow[j][1])
 			if(firstFileDataRow[j][0] != "transactionDate") {
-				// valueArray.push([[t_db_transactionDate], [firstFileDataRow[j][1]], [firstFileDataRow[j][2]]])
 				valueArray.push([t_db_transactionDate, parseFloat(t_db_transactionAmount), firstFileDataRow[j][2]])
-//				  setTimeout(() => { console.log(valueArray); }, 3750);
-			}
-			// console.log("[---- " + t_db_transactionDate + " ----]: " + ", " + firstFileDataRow[j][1] + ", " + firstFileDataRow[j][2])
+		}
+		if(!insertedFlag) {
+			console.log(valueArray)
 			importCSVintoSnowflake(conn, valueArray, 0, theProjectId, theDataSetId, theTableId)
 			insertedFlag = true
 		}
-		// if(!insertedFlag) {
-		// }
-	// t_record.push([dataPack])
-		// console.log(dataPack.map(x => x.join(',')).join('\r'))
-		// console.log(t_record)
 	});
+
   }
-
-
 }
 
 
